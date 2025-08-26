@@ -1,0 +1,458 @@
+version: "3.8"
+
+# 定义环境变量，便于管理和修改
+x-common-config: &common-config
+  restart: unless-stopped
+  networks:
+    - oceanbase-network
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "100m"
+      max-file: "3"
+  security_opt:
+    - no-new-privileges:true
+  read_only: false
+  tmpfs:
+    - /tmp
+    - /var/tmp
+
+x-health-check: &health-check-common
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
+
+services:
+  # OceanBase 数据库服务
+  oceanbase:
+    image: oceanbase/oceanbase-ce:latest
+    container_name: oceanbase
+    environment:
+      # 基础配置
+      - MODE=mini
+      - OB_ROOT_PASSWORD=${OB_ROOT_PASSWORD:-123456}
+      - OB_TENANT_NAME=${OB_TENANT_NAME:-oceanbase_db}
+      - OB_TENANT_PASSWORD=${OB_TENANT_PASSWORD:-123456}
+      - OB_MEMORY_LIMIT=${OB_MEMORY_LIMIT:-6G}
+      - OB_CPU_COUNT=${OB_CPU_COUNT:-2}
+      # 性能优化配置
+      - OB_ENABLE_SYSLOG=true
+      - OB_SYSLOG_LEVEL=INFO
+      - OB_ENABLE_RICH_ERROR_MSG=true
+      # 时区配置
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./oceanbase-data:/root/ob:Z
+      - ./oceanbase-conf:/root/.obd/cluster:ro
+      - ./oceanbase-backup:/root/ob/backup:Z
+    ports:
+      - "${OB_PORT:-2881}:2881"
+    restart: unless-stopped
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock: -1
+      stack: 67108864
+    healthcheck:
+      test: ["CMD-SHELL", "obclient -h127.0.0.1 -P2881 -uroot@sys -p$${OB_ROOT_PASSWORD} -e 'select 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - oceanbase-network
+    deploy:
+      resources:
+        limits:
+          memory: ${OB_MEMORY_LIMIT:-6G}
+          cpus: '${OB_CPU_COUNT:-2.0}'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+
+  # MySQL 数据库 - OCP 元数据存储
+  ocp-mysql:
+    image: mysql:8.0
+    container_name: ocp-mysql
+    environment:
+      # 基础配置
+      MYSQL_ROOT_PASSWORD: ${OCP_MYSQL_ROOT_PASSWORD:-ocp123456}
+      MYSQL_DATABASE: ${OCP_MYSQL_DATABASE:-ocp}
+      MYSQL_USER: ${OCP_MYSQL_USER:-ocp}
+      MYSQL_PASSWORD: ${OCP_MYSQL_PASSWORD:-ocp123456}
+      # 性能优化配置
+      MYSQL_INNODB_BUFFER_POOL_SIZE: 1G
+      MYSQL_INNODB_LOG_FILE_SIZE: 256M
+      MYSQL_INNODB_FLUSH_LOG_AT_TRX_COMMIT: 2
+      MYSQL_INNODB_FLUSH_METHOD: O_DIRECT
+      # 字符集配置
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+      # 时区配置
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./ocp-mysql-data:/var/lib/mysql:Z
+      - ./ocp-mysql-init:/docker-entrypoint-initdb.d:ro
+      - ./ocp-mysql-conf:/etc/mysql/conf.d:ro
+      - ./ocp-mysql-backup:/backup:Z
+    ports:
+      - "${OCP_MYSQL_PORT:-3306}:3306"
+    restart: unless-stopped
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --innodb-buffer-pool-size=1G
+      --innodb-log-file-size=256M
+      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-method=O_DIRECT
+      --max-connections=200
+      --max-connect-errors=1000
+      --wait-timeout=28800
+      --interactive-timeout=28800
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+    networks:
+      - oceanbase-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${OCP_MYSQL_ROOT_PASSWORD:-ocp123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  # Redis 缓存 - OCP 缓存服务
+  ocp-redis:
+    image: redis:7.0-alpine
+    container_name: ocp-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${OCP_REDIS_PASSWORD:-ocp123456}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 300
+      --timeout 0
+      --tcp-backlog 511
+    volumes:
+      - ./ocp-redis-data:/data:Z
+      - ./ocp-redis-conf:/usr/local/etc/redis:ro
+      - ./ocp-redis-backup:/backup:Z
+    ports:
+      - "${OCP_REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
+    networks:
+      - oceanbase-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${OCP_REDIS_PASSWORD:-ocp123456}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  # OceanBase Cloud Platform (OCP)
+  ocp:
+    image: oceanbase/ocp:latest
+    container_name: ocp
+    environment:
+      # OCP 数据库连接配置
+      - OCP_DB_HOST=ocp-mysql
+      - OCP_DB_PORT=${OCP_MYSQL_PORT:-3306}
+      - OCP_DB_NAME=${OCP_MYSQL_DATABASE:-ocp}
+      - OCP_DB_USER=${OCP_MYSQL_USER:-ocp}
+      - OCP_DB_PASSWORD=${OCP_MYSQL_PASSWORD:-ocp123456}
+      - OCP_DB_ROOT_PASSWORD=${OCP_MYSQL_ROOT_PASSWORD:-ocp123456}
+      
+      # Redis 连接配置
+      - OCP_REDIS_HOST=ocp-redis
+      - OCP_REDIS_PORT=${OCP_REDIS_PORT:-6379}
+      - OCP_REDIS_PASSWORD=${OCP_REDIS_PASSWORD:-ocp123456}
+      
+      # OCP 服务配置
+      - OCP_SERVER_PORT=${OCP_SERVER_PORT:-8080}
+      - OCP_SERVER_HOST=${OCP_SERVER_HOST:-0.0.0.0}
+      - OCP_LOG_LEVEL=${OCP_LOG_LEVEL:-INFO}
+      - OCP_LOG_PATH=/opt/ocp/logs
+      - OCP_LOG_MAX_SIZE=100MB
+      - OCP_LOG_MAX_FILES=10
+      
+      # OceanBase 连接配置
+      - OB_HOST=oceanbase
+      - OB_PORT=${OB_PORT:-2881}
+      - OB_ROOT_USER=root@sys
+      - OB_ROOT_PASSWORD=${OB_ROOT_PASSWORD:-123456}
+      - OB_TENANT_NAME=${OB_TENANT_NAME:-oceanbase_db}
+      - OB_TENANT_USER=root
+      - OB_TENANT_PASSWORD=${OB_TENANT_PASSWORD:-123456}
+      
+      # 监控配置
+      - OCP_MONITOR_ENABLED=true
+      - OCP_MONITOR_INTERVAL=30s
+      - OCP_METRICS_ENABLED=true
+      - OCP_METRICS_PORT=9090
+      
+      # 时区设置
+      - TZ=${TZ:-Asia/Shanghai}
+      
+      # JVM 配置
+      - JAVA_OPTS=-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+    volumes:
+      - ./ocp-data:/opt/ocp/data:Z
+      - ./ocp-logs:/opt/ocp/logs:Z
+      - ./ocp-config:/opt/ocp/config:ro
+      - ./ocp-backup:/opt/ocp/backup:Z
+    ports:
+      - "${OCP_SERVER_PORT:-8080}:8080"
+      - "9090:9090"  # 监控指标端口
+    restart: unless-stopped
+    depends_on:
+      ocp-mysql:
+        condition: service_healthy
+      ocp-redis:
+        condition: service_healthy
+      oceanbase:
+        condition: service_healthy
+    networks:
+      - oceanbase-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200m"
+        max-file: "5"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+  # 监控服务 - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: oceanbase-prometheus
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./prometheus-data:/prometheus:Z
+      - ./prometheus-config:/etc/prometheus:ro
+    ports:
+      - "9091:9090"
+    restart: unless-stopped
+    networks:
+      - oceanbase-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 日志聚合服务 - Loki
+  loki:
+    image: grafana/loki:latest
+    container_name: oceanbase-loki
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./loki-data:/loki:Z
+      - ./loki-config:/etc/loki:ro
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - oceanbase-network
+    command:
+      - '-config.file=/etc/loki/loki-config.yml'
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 可视化面板 - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: oceanbase-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./grafana-data:/var/lib/grafana:Z
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./grafana-dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - oceanbase-network
+    depends_on:
+      - prometheus
+      - loki
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  oceanbase-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${OCEANBASE_NETWORK_SUBNET:-172.23.0.0/16}
+          gateway: ${OCEANBASE_NETWORK_GATEWAY:-172.23.0.1}
+    driver_opts:
+      com.docker.network.bridge.name: oceanbase-br0
+    enable_ipv6: false
+
+volumes:
+  # 数据卷
+  oceanbase-data:
+    driver: local
+  ocp-mysql-data:
+    driver: local
+  ocp-redis-data:
+    driver: local
+  ocp-data:
+    driver: local
+  ocp-logs:
+    driver: local
+  ocp-config:
+    driver: local
+  
+  # 备份卷
+  oceanbase-backup:
+    driver: local
+  ocp-mysql-backup:
+    driver: local
+  ocp-redis-backup:
+    driver: local
+  ocp-backup:
+    driver: local
+  
+  # 监控卷
+  prometheus-data:
+    driver: local
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+  
+  # 配置卷
+  prometheus-config:
+    driver: local
+  loki-config:
+    driver: local
+  grafana-provisioning:
+    driver: local
+  grafana-dashboards:
+    driver: local
+  ocp-mysql-conf:
+    driver: local
+  ocp-redis-conf:
+    driver: local
