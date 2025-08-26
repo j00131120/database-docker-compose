@@ -1,0 +1,33 @@
+# Runtime data and backups (do not commit)
+
+# OceanBase
+oceanbase-data/
+oceanbase-backup/
+
+# OCP (app)
+ocp-data/
+ocp-logs/
+ocp-backup/
+
+# OCP MySQL
+ocp-mysql-data/
+ocp-mysql-backup/
+
+# OCP Redis
+ocp-redis-data/
+ocp-redis-backup/
+
+# Observability
+prometheus-data/
+loki-data/
+grafana-data/
+
+# Keep configuration and dashboards tracked
+!ocp-mysql-conf/
+!ocp-mysql-init/
+!ocp-redis-conf/
+!prometheus-config/
+!loki-config/
+!grafana-provisioning/
+!grafana-dashboards/
+

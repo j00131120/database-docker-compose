@@ -1,0 +1,23 @@
+oceanbase-ce:
+  servers:
+    - 172.23.0.6
+  global:
+    home_path: /root/ob/observer
+    mysql_port: 2881
+    rpc_port: 2882
+    zone: zone1
+    appname: obcluster
+    memory_limit: 6G
+    system_memory: 1G
+    datafile_size: 5G
+    log_disk_size: 5G
+    root_password: 
+    scenario: express_oltp
+    obconfig_url: 
+    cpu_count: 16
+    production_mode: false
+    syslog_level: INFO
+    enable_syslog_wf: false
+    enable_syslog_recycle: true
+    max_syslog_file_count: 4
+    enable_rich_error_msg: true
