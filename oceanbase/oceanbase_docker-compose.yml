@@ -209,8 +209,8 @@ services:
 
   # OceanBase Cloud Platform (OCP)
   ocp:
-    image: oceanbase/ocp:latest
-    container_name: ocp
+    image: oceanbase/ocp-ce:latest
+    container_name: ocp-ce
     environment:
       # OCP 数据库连接配置
       - OCP_DB_HOST=ocp-mysql
