@@ -1,0 +1,25 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Up (All Targets)",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        { "expr": "sum(up)", "legendFormat": "sum(up)" }
+      ],
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 }
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["oceanbase"],
+  "timezone": "browser",
+  "title": "OceanBase Overview",
+  "version": 1
+}
+
+
