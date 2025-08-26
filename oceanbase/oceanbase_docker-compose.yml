@@ -250,6 +250,7 @@ services:
     volumes:
       - ./ocp-data:/opt/ocp/data:Z
       - ./ocp-logs:/opt/ocp/logs:Z
+      - ./ocp-logs:/home/admin/logs:Z
       - ./ocp-config:/opt/ocp/config:ro
       - ./ocp-backup:/opt/ocp/backup:Z
     ports:
