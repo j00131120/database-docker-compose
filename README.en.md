@@ -19,10 +19,13 @@ A curated set of Docker Compose setups for popular databases. Each stack is self
   - Compose: `mongodb/mongodb_docker-compose.yml`
 - Neo4j
   - Path: `neo4j/`
-- Milvus
+  - Compose: `neo4j/neo4j_docker-compose.yml`
+- Milvus (Standalone)
   - Path: `milvus/`
+  - Compose: `milvus/milvus_docker-compose.yml`
 - PostgreSQL
   - Path: `postgresql/`
+  - Compose: `postgresql/postgres_docker-compose.yml`
 
 ## Quick Start (example: OceanBase)
 ```bash
