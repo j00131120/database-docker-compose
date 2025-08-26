@@ -44,7 +44,7 @@ services:
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
       - ./oceanbase-data:/root/ob:Z
-      - ./oceanbase-conf:/root/.obd/cluster:ro
+      - ./oceanbase-conf:/root/.obd/cluster
       - ./oceanbase-backup:/root/ob/backup:Z
     ports:
       - "${OB_PORT:-2881}:2881"
@@ -148,12 +148,6 @@ services:
         max-file: "3"
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
 
   # Redis 缓存 - OCP 缓存服务
   ocp-redis:
