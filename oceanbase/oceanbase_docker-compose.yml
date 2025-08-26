@@ -250,9 +250,10 @@ services:
     volumes:
       - ./ocp-data:/opt/ocp/data:Z
       - ./ocp-logs:/opt/ocp/logs:Z
-      - ./ocp-logs:/home/admin/logs:Z
       - ./ocp-config:/opt/ocp/config:ro
       - ./ocp-backup:/opt/ocp/backup:Z
+    tmpfs:
+      - /home/admin/logs:rw,uid=500,gid=500,mode=0775,size=64m
     ports:
       - "${OCP_SERVER_PORT:-8080}:8080"
       - "9090:9090"  # 监控指标端口
@@ -287,12 +288,6 @@ services:
         max-file: "5"
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
 
   # 监控服务 - Prometheus
   prometheus:
