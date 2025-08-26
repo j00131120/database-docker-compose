@@ -1,0 +1,62 @@
+# MySQL Docker Compose 开发环境覆盖配置
+# 复制此文件为 docker-compose.override.yml 来自定义开发环境配置
+
+version: '3.8.8'
+
+services:
+  mysql:
+    # 开发环境配置
+    environment:
+      # 启用更多调试信息
+      MYSQL_LOG_CONSOLE: 1
+      MYSQL_LOG_ERROR_SERVICES: "mysql"
+    
+    # 开发环境端口绑定（允许外部访问）
+    ports:
+      - "0.0.0.0:3306:3306"
+    
+    # 开发环境资源限制（更宽松）
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    
+    # 开发环境挂载（便于调试）
+    volumes:
+      - ./dev-data:/var/lib/mysql
+      - ./dev-logs:/var/log/mysql
+      - ./dev-conf:/etc/mysql/conf.d
+      - ./dev-scripts:/docker-entrypoint-initdb.d
+
+  phpmyadmin:
+    # 开发环境端口绑定（允许外部访问）
+    ports:
+      - "0.0.0.0:8080:80"
+    
+    # 开发环境资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+
+# 开发环境数据卷
+volumes:
+  dev-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./dev-data
+
+# 开发环境网络配置
+networks:
+  mysql_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

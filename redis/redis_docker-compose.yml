@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7.4.5
+    container_name: redis_container
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+      - ./logs:/logs
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--appendonly", "yes"]
+    environment:
+      - TZ=Asia/Shanghai
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+    networks:
+      - redis_network
+    labels:
+      - "com.example.description=Redis Cache Server"
+      - "com.example.version=7.4.5"
+
+networks:
+  redis_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis_data:
+    driver: local

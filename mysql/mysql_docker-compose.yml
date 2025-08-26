@@ -1,0 +1,120 @@
+version: '3.8.8'
+
+services:
+  mysql:
+    image: mysql:8.0.36
+    container_name: mysql8.0
+    restart: unless-stopped
+    
+    # 环境变量配置
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-mysql_db}
+      MYSQL_USER: ${MYSQL_USER:-app_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-app_password}
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+      MYSQL_INITDB_SKIP_TZINFO: 1
+      TZ: ${TZ:-Asia/Shanghai}
+    
+    # 端口映射
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    
+    # 数据卷挂载
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./logs:/var/log/mysql
+      - ./conf:/etc/mysql/conf.d
+      - ./backup:/backup
+    
+    # MySQL配置
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --innodb-log-file-size=64M
+      --max-connections=200
+      --query-cache-size=32M
+      --slow-query-log=1
+      --slow-query-log-file=/var/log/mysql/slow.log
+      --log-error=/var/log/mysql/error.log
+      --general-log=1
+      --general-log-file=/var/log/mysql/general.log
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+      interval: 30s
+    
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # 网络配置
+    networks:
+      - mysql_network
+    
+    # 安全配置
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=100m
+
+  # 可选：添加phpMyAdmin管理界面
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2.1
+    container_name: phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    volumes:
+      - /sessions
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - mysql_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+# 数据卷定义
+volumes:
+  mysql_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+
+# 网络定义
+networks:
+  mysql_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
