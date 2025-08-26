@@ -29,3 +29,4 @@ obj/
 *.bak
 *.log
 
+/.idea/*
