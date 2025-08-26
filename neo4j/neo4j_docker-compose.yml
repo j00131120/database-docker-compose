@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  neo4j:
+    image: neo4j:5
+    container_name: neo4j5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NEO4J_HTTP_PORT:-7474}:7474"
+      - "127.0.0.1:${NEO4J_BOLT_PORT:-7687}:7687"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/neo4jpassword}
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-512M}
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP_INIT:-512M}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX:-1G}
+    volumes:
+      - ./data:/data
+      - ./logs:/logs
+      - ./plugins:/plugins
+      - ./import:/import
+      - ./conf:/conf
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+

@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    container_name: milvus-etcd
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_HEARTBEAT_INTERVAL: "500"
+      ETCD_ELECTION_TIMEOUT: "2500"
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:2379:2379"
+    volumes:
+      - ./volumes/etcd:/etcd
+
+  minio:
+    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
+    container_name: milvus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    command: server /minio_data --console-address ":9001"
+    volumes:
+      - ./volumes/minio:/minio_data
+
+  pulsar:
+    image: apachepulsar/pulsar:3.2.0
+    container_name: milvus-pulsar
+    restart: unless-stopped
+    command: bin/pulsar standalone
+    environment:
+      PULSAR_PREFIX_webServicePort: "8080"
+      PULSAR_PREFIX_brokerServicePort: "6650"
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:6650:6650"
+      - "127.0.0.1:8085:8080"
+    volumes:
+      - ./volumes/pulsar:/pulsar/data
+
+  milvus:
+    image: milvusdb/milvus:2.4.9
+    container_name: milvus-standalone
+    restart: unless-stopped
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      PULSAR_ADDRESS: pulsar://pulsar:6650
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      - etcd
+      - minio
+      - pulsar
+    ports:
+      - "127.0.0.1:${MILVUS_PORT:-19530}:19530"
+      - "127.0.0.1:${MILVUS_HTTP_PORT:-9091}:9091"
+    volumes:
+      - ./volumes/milvus:/var/lib/milvus
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+
