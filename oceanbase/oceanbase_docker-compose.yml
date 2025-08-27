@@ -28,23 +28,23 @@ services:
   oceanbase:
     image: oceanbase/oceanbase-ce:latest
     container_name: oceanbase
+    hostname: oceanbase
+    privileged: true
     environment:
       # 基础配置
       - MODE=mini
       - OB_ROOT_PASSWORD=${OB_ROOT_PASSWORD:-123456}
+      - OB_CLUSTER_NAME=obcluster
       - OB_TENANT_NAME=${OB_TENANT_NAME:-oceanbase_db}
       - OB_TENANT_PASSWORD=${OB_TENANT_PASSWORD:-123456}
-      - OB_MEMORY_LIMIT=${OB_MEMORY_LIMIT:-6G}
-      - OB_CPU_COUNT=${OB_CPU_COUNT:-2}
-      # 性能优化配置
-      - OB_ENABLE_SYSLOG=true
-      - OB_SYSLOG_LEVEL=INFO
-      - OB_ENABLE_RICH_ERROR_MSG=true
+      - OB_DATAFILE_SIZE=512M
+      - OB_LOG_DISK_SIZE=512M
+      - OB_MEMORY_LIMIT=4G
+      - OB_SYSTEM_MEMORY=1G
       # 时区配置
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
       - ./oceanbase-data:/root/ob:Z
-      - ./oceanbase-conf:/root/.obd/cluster
       - ./oceanbase-backup:/root/ob/backup:Z
     ports:
       - "${OB_PORT:-2881}:2881"
@@ -57,21 +57,21 @@ services:
       memlock: -1
       stack: 67108864
     healthcheck:
-      test: ["CMD-SHELL", "obclient -h127.0.0.1 -P2881 -uroot@sys -p$${OB_ROOT_PASSWORD} -e 'select 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
+      test: ["CMD-SHELL", "mysql -h127.0.0.1 -P2881 -uroot@sys -p$${OB_ROOT_PASSWORD} -e 'select 1' || exit 1"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+      start_period: 180s
     networks:
       - oceanbase-network
     deploy:
       resources:
         limits:
-          memory: ${OB_MEMORY_LIMIT:-6G}
-          cpus: '${OB_CPU_COUNT:-2.0}'
+          memory: 4G
+          cpus: 2
         reservations:
-          memory: 2G
-          cpus: '1.0'
+          memory: 1G
+          cpus: '0.5'
     logging:
       driver: "json-file"
       options:
@@ -392,13 +392,6 @@ services:
 networks:
   oceanbase-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: ${OCEANBASE_NETWORK_SUBNET:-172.23.0.0/16}
-          gateway: ${OCEANBASE_NETWORK_GATEWAY:-172.23.0.1}
-    driver_opts:
-      com.docker.network.bridge.name: oceanbase-br0
-    enable_ipv6: false
 
 volumes:
   # 数据卷
