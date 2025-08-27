@@ -14,5 +14,3 @@ oceanbase-ce:
     cpu_count: 2
   obproxy:
     enable: false
-
-
