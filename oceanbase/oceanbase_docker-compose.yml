@@ -41,6 +41,7 @@ services:
       - OB_LOG_DISK_SIZE=512M
       - OB_MEMORY_LIMIT=4G
       - OB_SYSTEM_MEMORY=1G
+      - FORCE_DEPLOY=true
       # 时区配置
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
@@ -57,7 +58,7 @@ services:
       memlock: -1
       stack: 67108864
     healthcheck:
-      test: ["CMD-SHELL", "mysql -h127.0.0.1 -P2881 -uroot@sys -p$${OB_ROOT_PASSWORD} -e 'select 1' || exit 1"]
+      test: ["CMD-SHELL", "obclient -h127.0.0.1 -P2881 -uroot@sys -p$${OB_ROOT_PASSWORD} -e 'SELECT 1;' || exit 1"]
       interval: 60s
       timeout: 30s
       retries: 10
@@ -68,10 +69,10 @@ services:
       resources:
         limits:
           memory: 4G
-          cpus: 2
+          cpus: 3
         reservations:
-          memory: 1G
-          cpus: '0.5'
+          memory: 2G
+          cpus: '1.0'
     logging:
       driver: "json-file"
       options:
@@ -87,6 +88,7 @@ services:
 
   # MySQL 数据库 - OCP 元数据存储
   ocp-mysql:
+    profiles: ["extras"]
     image: mysql:8.0
     container_name: ocp-mysql
     environment:
@@ -151,6 +153,7 @@ services:
 
   # Redis 缓存 - OCP 缓存服务
   ocp-redis:
+    profiles: ["extras"]
     image: redis:7.0-alpine
     container_name: ocp-redis
     command: >
@@ -203,6 +206,7 @@ services:
 
   # OceanBase Cloud Platform (OCP)
   ocp:
+    profiles: ["extras"]
     image: oceanbase/ocp-ce:latest
     container_name: ocp-ce
     environment:
@@ -291,6 +295,7 @@ services:
 
   # 监控服务 - Prometheus
   prometheus:
+    profiles: ["extras"]
     image: prom/prometheus:latest
     container_name: oceanbase-prometheus
     environment:
@@ -326,6 +331,7 @@ services:
 
   # 日志聚合服务 - Loki
   loki:
+    profiles: ["extras"]
     image: grafana/loki:latest
     container_name: oceanbase-loki
     environment:
@@ -356,6 +362,7 @@ services:
 
   # 可视化面板 - Grafana
   grafana:
+    profiles: ["extras"]
     image: grafana/grafana:latest
     container_name: oceanbase-grafana
     environment:

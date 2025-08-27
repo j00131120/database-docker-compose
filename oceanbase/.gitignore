@@ -31,3 +31,4 @@ grafana-data/
 !grafana-provisioning/
 !grafana-dashboards/
 
+/ocp-mysql-data/*
